@@ -13,3 +13,4 @@ Dự án này lưu trữ các mã nguồn (Scripts), cấu hình mẫu (Scene Co
 * **Tự động hóa qua thiết bị di động (Websocket Automation):** Sử dụng các kịch bản lập trình kết nối qua OBS Websocket, cho phép biến điện thoại thành remote thông minh để chuyển cảnh, preview và điều khiển luồng từ xa dưới lớp học.
 
 ---
+* **Link Playlist chuỗi video Chuyên nghiệp hóa bài thuyết trình:** https://www.youtube.com/watch?v=7m8nnYINW7w&list=PLOfvfm2SbjchWDctJH941hamtoBbZL3gG&pp=sAgC
