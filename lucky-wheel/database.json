@@ -1,0 +1,59 @@
+{
+    "active_id": "wheel_1780280359650",
+    "wheels": {
+        "wheel_1": {
+            "items": [
+                {
+                    "color": "#e81123",
+                    "name": "Chúc may mắn lần sau",
+                    "sound": "",
+                    "weight": 50
+                },
+                {
+                    "color": "#0078d4",
+                    "name": "Voucher 50K",
+                    "sound": "",
+                    "weight": 30
+                },
+                {
+                    "color": "#107c41",
+                    "name": "Iphone 15 Pro Max",
+                    "sound": "",
+                    "weight": 5
+                }
+            ],
+            "name": "Vòng quay mặc định",
+            "spin_sound": ""
+        },
+        "wheel_1780280359650": {
+            "name": "Nên bao bạn Nguyễn Văn A ăn gì",
+            "spin_sound": "music.mp3",
+            "items": [
+                {
+                    "name": "Trà sữa",
+                    "weight": 30,
+                    "color": "#0078d4",
+                    "sound": ""
+                },
+                {
+                    "name": "Mì cayyyyyyy",
+                    "weight": 19,
+                    "color": "#107c41",
+                    "sound": ""
+                },
+                {
+                    "name": "iPhone 17 Pro Max",
+                    "weight": 1,
+                    "color": "#107c41",
+                    "sound": ""
+                },
+                {
+                    "name": "Có cái nịt",
+                    "weight": 50,
+                    "color": "#107c41",
+                    "sound": ""
+                }
+            ]
+        }
+    }
+}

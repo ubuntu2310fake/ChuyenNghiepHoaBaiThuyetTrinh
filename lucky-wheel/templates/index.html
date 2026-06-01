@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Hệ Thống Vòng Quay (WinUI3)</title>
+    <link rel="stylesheet" href="/static/style_winui.css">
+    <script src="/static/socket.io.min.js"></script>
+    <style>
+        .prize-card { border: 1px solid #e5e5e5; background-color: #ffffff; border-radius: 8px; padding: 16px; margin-bottom: 12px; position: relative; box-shadow: 0 1px 4px rgba(0,0,0,0.03); transition: 0.2s; }
+        .prize-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .btn-delete { position: absolute; top: 12px; right: 12px; background: #ffe6e6; color: #d83b01; border: none; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 13px; font-weight: bold; }
+        .grid-row { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 12px; margin-top: 10px; }
+        @media (max-width: 768px) {
+            body { padding: 10px; } .main-layout { flex-direction: column; gap: 16px; }
+            .wui-card { min-width: 100% !important; padding: 16px; }
+            .grid-row { grid-template-columns: 1fr; gap: 8px; }
+            .wheel-container canvas { width: 100%; max-width: 340px; height: auto; }
+            .glass-popup { padding: 30px 20px; width: 90%; } .prize-title { font-size: 28px; }
+        }
+        .audio-toggle-container { margin-top: 15px; display: flex; justify-content: center; align-items: center; gap: 10px; background: #eef5fb; padding: 10px; border-radius: 6px; border: 1px solid #c7e0f4;}
+        .audio-toggle-container input { width: 18px; height: 18px; cursor: pointer; accent-color: #005fba;}
+        .audio-toggle-container label { cursor: pointer; font-size: 14px; font-weight: 600; color: #005fba; margin:0;}
+    </style>
+</head>
+<body>
+
+    <div id="popup-overlay" class="glass-overlay">
+        <div class="glass-popup">
+            <div id="pill-msg" class="pill-shape">Chúc mừng bạn</div>
+            <h1 id="winner-name" class="prize-title">...</h1>
+            <button class="wui-button wui-button-primary" style="padding: 8px 40px;" onclick="closePopups()">OK</button>
+        </div>
+    </div>
+
+    <div class="main-layout">
+        <div class="wui-card wheel-container">
+            <h2 class="wui-title" style="margin-bottom: 20px;">Hệ Thống Vòng Quay</h2>
+            <canvas id="wheelCanvas" class="wui-canvas" width="500" height="500"></canvas>
+            
+            <button class="wui-button wui-button-primary" id="spinBtn" style="margin-top: 30px; width: 100%; max-width: 300px; height: 45px; font-size: 16px; font-weight: bold;" onclick="requestSpin()">QUAY NGAY</button>
+            
+            <div class="audio-toggle-container" style="max-width: 300px; width: 100%;">
+                <input type="checkbox" id="playLocalAudio">
+                <label for="playLocalAudio">Phát nhạc trên thiết bị này</label>
+            </div>
+        </div>
+
+        <div class="wui-card" style="display: flex; flex-direction: column; max-height: 90vh;">
+            <div class="wui-input-group">
+                <label>Quản lý các Vòng quay</label>
+                <div style="display: flex; gap: 8px;">
+                    <select class="wui-select" id="wheelSelect" onchange="switchWheel()" style="flex: 1;"></select>
+                    <button class="wui-button" onclick="createNewWheel()">+ Tạo mới</button>
+                </div>
+            </div>
+            <div class="wui-input-group"><input class="wui-input" type="text" id="wheelName" placeholder="Tên Vòng Quay"></div>
+            <hr style="border: none; border-top: 1px solid #e5e5e5; margin: 10px 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h3 class="wui-title" style="margin: 0; font-size: 16px;">DANH SÁCH PHẦN THƯỞNG</h3>
+                <button class="wui-button" onclick="addPrizeCard()" style="font-weight: bold; color: #005fba;">+ THÊM MỚI</button>
+            </div>
+            <div id="prizeListContainer" style="overflow-y: auto; padding-right: 8px; flex: 1; min-height: 300px; background: #f9f9f9; padding: 10px; border-radius: 6px;"></div>
+            <hr style="border: none; border-top: 1px solid #e5e5e5; margin: 15px 0;">
+            <div class="wui-input-group">
+                <label>Âm thanh lúc vòng đang quay</label>
+                <select class="wui-select" id="spinSound">
+                    <option value="">-- Không có âm thanh --</option>
+                    {% for s in sounds %}<option value="{{s}}">{{s}}</option>{% endfor %}
+                </select>
+            </div>
+            <button class="wui-button wui-button-primary" style="width: 100%; height: 45px; font-size: 16px; font-weight: bold;" onclick="updateConfig()">LƯU CẤU HÌNH</button>
+        </div>
+    </div>
+
+    <script> const availableSounds = {{ sounds | tojson }}; </script>
+
+    <script>
+        const socket = io();
+        let db = { active_id: "", wheels: {} };
+        let activeWheel = {};
+        const canvas = document.getElementById('wheelCanvas');
+        const ctx = canvas.getContext('2d');
+        const centerX = canvas.width / 2, centerY = canvas.height / 2, radius = 220;
+        
+        let currentRotation = 0, isSpinning = false, pointerWiggle = 0;
+        let lastSegment = 0; // Lưu lại múi kim vừa đi qua để đập kim
+        let spinAudio = null;
+        let spinDurationMs = 10000;
+
+        fetch('/api/config').then(r => r.json()).then(data => {
+            if (data && data.wheels) { db = data; renderWheelSelector(); switchWheel(false); }
+        });
+
+        function renderWheelSelector() {
+            const select = document.getElementById('wheelSelect'); select.innerHTML = '';
+            for (const [id, wheel] of Object.entries(db.wheels)) {
+                const opt = document.createElement('option'); opt.value = id; opt.textContent = wheel.name;
+                if (id === db.active_id) opt.selected = true; select.appendChild(opt);
+            }
+        }
+
+        function createNewWheel() {
+            const newId = 'wheel_' + Date.now();
+            db.wheels[newId] = { name: "Vòng quay mới", spin_sound: "", items: [ {name: "Giải an ủi", weight: 100, color: "#0078d4", sound: ""} ] };
+            db.active_id = newId; renderWheelSelector(); switchWheel(true);
+        }
+
+        function switchWheel(emitChange = true) {
+            const id = document.getElementById('wheelSelect').value; if(!id) return;
+            db.active_id = id; activeWheel = db.wheels[id];
+            
+            document.getElementById('wheelName').value = activeWheel.name;
+            document.getElementById('spinSound').value = activeWheel.spin_sound || "";
+            
+            spinDurationMs = 10000;
+            if (activeWheel.spin_sound) {
+                spinAudio = new Audio('/static/' + activeWheel.spin_sound);
+                spinAudio.addEventListener('loadedmetadata', function() {
+                    if(spinAudio.duration > 0) spinDurationMs = spinAudio.duration * 1000;
+                });
+            } else { spinAudio = null; }
+            
+            const container = document.getElementById('prizeListContainer'); container.innerHTML = '';
+            (activeWheel.items || []).forEach(item => { container.insertAdjacentHTML('beforeend', getPrizeHTML(item)); });
+            drawFrame(); if (emitChange) updateConfig(true);
+        }
+
+        function getPrizeHTML(item) {
+            let soundOptions = `<option value="">-- Không nhạc --</option>`;
+            availableSounds.forEach(s => { let sel = (s === item.sound) ? 'selected' : ''; soundOptions += `<option value="${s}" ${sel}>${s}</option>`; });
+            const weightValue = (item.weight !== null && item.weight !== undefined) ? item.weight : '';
+            return `
+            <div class="prize-card">
+                <button class="btn-delete" onclick="this.parentElement.remove()">✕ Xóa</button>
+                <div class="wui-input-group" style="margin-bottom: 0;">
+                    <label style="font-size: 13px; font-weight: 600; color: #333;">Tên phần thưởng</label>
+                    <input class="wui-input item-name" type="text" value="${item.name}" style="padding-right: 60px;">
+                </div>
+                <div class="grid-row">
+                    <div><label style="font-size: 12px; color: #666;">Tỉ lệ (%)</label><input class="wui-input item-weight" type="number" placeholder="Tự dàn đều" value="${weightValue}"></div>
+                    <div><label style="font-size: 12px; color: #666;">Màu sắc</label><input class="item-color" type="color" value="${item.color}" style="width: 100%; height: 32px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;"></div>
+                    <div><label style="font-size: 12px; color: #666;">Nhạc trúng</label><select class="wui-select item-sound" style="height: 32px; padding: 4px;">${soundOptions}</select></div>
+                </div>
+            </div>`;
+        }
+
+        function addPrizeCard() {
+            const defaultItem = { name: "Giải thưởng mới", weight: null, color: "#107c41", sound: "" };
+            document.getElementById('prizeListContainer').insertAdjacentHTML('beforeend', getPrizeHTML(defaultItem));
+            const container = document.getElementById('prizeListContainer'); container.scrollTop = container.scrollHeight;
+        }
+
+        function updateConfig(silent = false) {
+            const cards = document.querySelectorAll('.prize-card'); const items = [];
+            let filledSum = 0; let emptyCards = [];
+
+            cards.forEach(card => {
+                const name = card.querySelector('.item-name').value.trim() || "Chưa đặt tên";
+                const weightInput = card.querySelector('.item-weight');
+                const color = card.querySelector('.item-color').value;
+                const sound = card.querySelector('.item-sound').value;
+                let weight = null;
+                if (weightInput.value.trim() !== "") { weight = parseFloat(weightInput.value); filledSum += weight; }
+                const itemObj = { name, weight, color, sound };
+                items.push(itemObj);
+                if (weight === null) emptyCards.push({ obj: itemObj, inputRef: weightInput });
+            });
+
+            if(items.length === 0) { alert("Bạn phải có ít nhất 1 phần thưởng!"); return; }
+
+            if (emptyCards.length > 0) {
+                let remaining = Math.max(0, 100 - filledSum);
+                let autoWeight = remaining / emptyCards.length;
+                if (autoWeight === 0 && remaining === 0) autoWeight = 1;
+                emptyCards.forEach(empty => { empty.obj.weight = parseFloat(autoWeight.toFixed(2)); empty.inputRef.value = empty.obj.weight; });
+            }
+
+            db.wheels[db.active_id] = { name: document.getElementById('wheelName').value, spin_sound: document.getElementById('spinSound').value, items: items };
+            socket.emit('update_config', db);
+            if(!silent) {
+                alert("Đã lưu & tự động tính toán cấu hình thành công!");
+                document.querySelector(`#wheelSelect option[value='${db.active_id}']`).textContent = db.wheels[db.active_id].name;
+            }
+        }
+
+        socket.on('config_updated', data => { db = data; activeWheel = db.wheels[db.active_id]; if (!isSpinning) drawFrame(); });
+
+        function drawFrame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (!activeWheel.items || activeWheel.items.length === 0) return;
+            const n = activeWheel.items.length; const arc = (Math.PI * 2) / n;
+            
+            ctx.save(); ctx.translate(centerX, centerY); ctx.rotate(currentRotation * Math.PI / 180);
+            for (let i = 0; i < n; i++) {
+                ctx.beginPath(); ctx.fillStyle = activeWheel.items[i].color; ctx.moveTo(0, 0); ctx.arc(0, 0, radius, i * arc, (i + 1) * arc); ctx.fill(); ctx.stroke();
+                ctx.save(); ctx.rotate(i * arc + arc / 2); ctx.textAlign = "right"; ctx.fillStyle = "white"; ctx.font = "bold 16px Segoe UI"; ctx.fillText(activeWheel.items[i].name, radius - 20, 6); ctx.restore();
+            }
+            ctx.fillStyle = "#ffffff"; ctx.strokeStyle = "#cccccc"; ctx.lineWidth = 2;
+            for (let i = 0; i < n; i++) { ctx.beginPath(); ctx.save(); ctx.rotate(i * arc); ctx.arc(radius - 8, 0, 6, 0, 2 * Math.PI); ctx.fill(); ctx.stroke(); ctx.restore(); }
+            ctx.restore();
+            
+            // THUẬT TOÁN ĐẬP KIM CHỐNG XUYÊN TÂM TỐC ĐỘ CAO
+            let segmentDegrees = 360 / n;
+            let currentSegment = Math.floor(currentRotation / segmentDegrees);
+            if (isSpinning && currentSegment !== lastSegment) {
+                pointerWiggle = -35; // Lực bật siêu mạnh
+                lastSegment = currentSegment;
+            }
+            pointerWiggle += (0 - pointerWiggle) * 0.15; // Nảy hồi lò xo
+            
+            ctx.save(); ctx.translate(centerX, centerY - radius - 10); ctx.rotate(pointerWiggle * Math.PI / 180);
+            ctx.beginPath(); ctx.moveTo(0, 25); ctx.lineTo(-15, 0); ctx.lineTo(15, 0); ctx.closePath(); ctx.fillStyle = "#d83b01"; ctx.fill();
+            ctx.shadowColor = 'rgba(0,0,0,0.3)'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 2; ctx.restore();
+        }
+
+        function requestSpin() {
+            if (isSpinning || !activeWheel.items || activeWheel.items.length === 0) return;
+            socket.emit('trigger_spin', { duration: spinDurationMs }); 
+        }
+
+        socket.on('start_spinning', data => {
+            document.getElementById('spinBtn').disabled = true;
+            isSpinning = true;
+            lastSegment = Math.floor(currentRotation / (360 / activeWheel.items.length)); // Khởi tạo mốc đập kim
+
+            const playLocal = document.getElementById('playLocalAudio').checked;
+            if (playLocal && spinAudio) {
+                spinAudio.currentTime = 0;
+                spinAudio.play().catch(e => console.log("Lỗi phát nhạc"));
+            }
+
+            // --- VẬT LÝ SIÊU TỐC ---
+            let T = data.duration;
+            let t_acc = Math.min(0.10 * T, 1500); // 1.5s là max tốc độ
+            let t_dec = Math.min(0.15 * T, 4000); // Kéo phanh dài kịch tính 4s cuối
+            let t_con = T - t_acc - t_dec;        
+            
+            const n = activeWheel.items.length;
+            const stopAngle = 270 - (data.index * (360/n)) - ((360/n) / 2);
+            
+            // X3 TỐC ĐỘ CHÓNG MẶT Ở ĐÂY (Chia 250 thay vì 800)
+            let spins = Math.max(10, Math.floor(T / 250)); 
+            
+            let startRotation = currentRotation % 360;
+            let totalRotation = 360 * spins + stopAngle; 
+            let deltaTheta = totalRotation - startRotation;
+            
+            let denom = (t_acc / 2) + t_con + (t_dec / 2);
+            let omega = deltaTheta / denom; // Max Speed đạt tới ~1400 độ/giây
+            
+            let startTime = null;
+            function animate(timestamp) {
+                if (!startTime) startTime = timestamp;
+                let t = timestamp - startTime;
+
+                if (t < T) {
+                    let theta = 0;
+                    if (t <= t_acc) { theta = 0.5 * (omega / t_acc) * (t * t); } 
+                    else if (t <= t_acc + t_con) { theta = 0.5 * omega * t_acc + omega * (t - t_acc); } 
+                    else {
+                        let t_prime = t - t_acc - t_con;
+                        theta = 0.5 * omega * t_acc + omega * t_con + omega * t_prime - 0.5 * (omega / t_dec) * (t_prime * t_prime); 
+                    }
+                    currentRotation = startRotation + theta;
+                    drawFrame(); requestAnimationFrame(animate);
+                } else {
+                    currentRotation = startRotation + deltaTheta; isSpinning = false; drawFrame();
+                    
+                    if (spinAudio) { spinAudio.pause(); spinAudio.currentTime = 0; }
+                    if (playLocal && data.sound) { new Audio('/static/' + data.sound).play().catch(e=>console.log(e)); }
+                    
+                    document.getElementById('pill-msg').style.backgroundColor = data.color;
+                    document.getElementById('winner-name').innerText = data.name;
+                    document.getElementById('popup-overlay').classList.add('show');
+                }
+            }
+            requestAnimationFrame(animate);
+        });
+
+        function closePopups() { socket.emit('close_all_popups'); }
+        socket.on('hide_popup', () => {
+            document.getElementById('popup-overlay').classList.remove('show');
+            document.getElementById('spinBtn').disabled = false;
+        });
+    </script>
+</body>
+</html>

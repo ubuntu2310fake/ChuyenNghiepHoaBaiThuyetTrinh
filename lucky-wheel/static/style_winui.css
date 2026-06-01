@@ -1,0 +1,270 @@
+/* =========================================================
+   WINUI 3 - FLUENT DESIGN THEME (Tối ưu cho Vòng Quay)
+========================================================= */
+
+/* --- Typography & Base --- */
+* {
+    box-sizing: border-box;
+    font-family: "Segoe UI Variable", "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+
+body {
+    background-color: #f3f3f3;
+    color: #1a1a1a;
+    margin: 0;
+    padding: 20px;
+    font-size: 14px;
+}
+
+/* Ẩn thanh cuộn trên OBS nhưng giữ lại ở trang điều khiển */
+body.obs-mode {
+    background-color: transparent !important;
+    overflow: hidden;
+    padding: 0;
+}
+
+/* --- Layout --- */
+.main-layout {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    max-width: 1100px;
+    margin: 0 auto;
+    align-items: flex-start;
+}
+
+.wui-card {
+    flex: 1;
+    min-width: 350px;
+    background-color: #ffffff;
+    border-radius: 8px;
+    padding: 24px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    border: 1px solid #e5e5e5;
+}
+
+.wui-title {
+    margin-top: 0;
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 20px;
+}
+
+/* --- Form Inputs (WinUI 3 Style) --- */
+.wui-input-group {
+    margin-bottom: 16px;
+}
+
+.wui-input-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 500;
+    color: #333;
+}
+
+.wui-input, .wui-textarea, .wui-select {
+    width: 100%;
+    background-color: rgba(255, 255, 255, 0.7);
+    border: 1px solid #d1d1d1;
+    border-bottom: 1px solid #8e8e8e; /* Đặc trưng Fluent */
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 14px;
+    color: #1a1a1a;
+    transition: all 0.2s ease;
+    outline: none;
+}
+
+.wui-textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.wui-input:focus, .wui-textarea:focus, .wui-select:focus {
+    background-color: #ffffff;
+    border-bottom: 2px solid #005fba;
+    padding-bottom: 5px; /* Bù lại 1px của border */
+}
+
+/* --- Buttons --- */
+.wui-button {
+    background-color: #fbfbfb;
+    border: 1px solid #e5e5e5;
+    border-bottom: 1px solid #cccccc;
+    border-radius: 4px;
+    padding: 6px 16px;
+    font-size: 14px;
+    color: #1a1a1a;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.1s;
+}
+
+.wui-button:hover {
+    background-color: #f6f6f6;
+}
+
+.wui-button:active {
+    background-color: #f0f0f0;
+    border-bottom: 1px solid #e5e5e5;
+    color: #616161;
+}
+
+.wui-button-primary {
+    background-color: #005fba;
+    border: 1px solid #146cbe;
+    border-bottom: 1px solid #0f4e89;
+    color: #ffffff;
+}
+
+.wui-button-primary:hover {
+    background-color: #196ec0;
+}
+
+.wui-button-primary:active {
+    background-color: #3184ca;
+    border-bottom: 1px solid #3184ca;
+    color: #a8e0ff;
+}
+
+.wui-button:disabled {
+    background-color: #f5f5f5;
+    color: #9d9d9d;
+    cursor: not-allowed;
+    border: 1px solid #e5e5e5;
+}
+
+/* --- Wheel Container --- */
+.wheel-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+}
+
+.wheel-pointer {
+    width: 0;
+    height: 0;
+    border-left: 18px solid transparent;
+    border-right: 18px solid transparent;
+    border-top: 30px solid #d83b01; /* Đỏ cam WinUI */
+    margin-bottom: -12px;
+    z-index: 10;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+}
+
+.wui-canvas {
+    max-width: 450px;
+    width: 100%;
+    height: auto;
+    border-radius: 50%;
+    border: 6px solid #ffffff;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
+}
+
+/* --- Pill Shape Notification (Viên thuốc) --- */
+.wui-pill {
+    display: none;
+    position: fixed;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 95, 186, 0.95);
+    color: white;
+    padding: 10px 24px;
+    border-radius: 50px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+    z-index: 9999;
+    font-weight: 600;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+/* Animation mượt mà cho Pill */
+@keyframes slideDown { 
+    from { top: -50px; opacity: 0; } 
+    to { top: 24px; opacity: 1; } 
+}
+
+.wui-pill.show {
+    display: flex;
+    animation: slideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Kích thước to hơn cho OBS */
+.obs-mode .wui-pill {
+    top: 40px;
+    font-size: 32px;
+    padding: 20px 48px;
+    background-color: rgba(0, 120, 212, 0.98);
+}
+
+/* ... [Giữ nguyên phần code CSS cũ của bạn ở trên] ... */
+
+/* --- NÂNG CẤP POPUP GLASSMORPHISM --- */
+.glass-overlay {
+    visibility: hidden;
+    opacity: 0;
+    position: fixed;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(12px); /* Làm nhòe nền đằng sau */
+    -webkit-backdrop-filter: blur(12px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    transition: visibility 0.4s, opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-overlay.show {
+    visibility: visible;
+    opacity: 1;
+}
+
+.glass-popup {
+    background: rgba(255, 255, 255, 0.85); /* Trắng đục, không viền */
+    padding: 50px 80px;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08); /* Đổ bóng sâu để nổi khối */
+    text-align: center;
+    transform: scale(0.9);
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-overlay.show .glass-popup {
+    transform: scale(1); /* Hiệu ứng zoom in mượt mà */
+}
+
+/* Viên thuốc (Pill) */
+.pill-shape {
+    display: inline-block;
+    padding: 8px 30px;
+    border-radius: 999px;
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.prize-title {
+    font-size: 42px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin: 0 0 40px 0;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Ẩn thanh chọn cấu hình khi hiển thị trên OBS */
+.obs-mode .wui-card:last-child {
+    display: none;
+}
+.obs-mode .wheel-container {
+    background: transparent; border: none; box-shadow: none;
+}

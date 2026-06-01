@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>OBS Lucky Wheel</title>
+    <link rel="stylesheet" href="/static/style_winui.css">
+    <script src="/static/socket.io.min.js"></script>
+</head>
+<body class="obs-mode"> 
+
+    <div id="popup-overlay" class="glass-overlay">
+        <div class="glass-popup">
+            <div id="pill-msg" class="pill-shape">Chúc mừng bạn</div>
+            <h1 id="winner-name" class="prize-title">...</h1>
+        </div>
+    </div>
+    
+    <div class="wheel-container" style="height: 100vh; justify-content: center; align-items: center;">
+        <canvas id="wheel" class="wui-canvas" width="500" height="500"></canvas>
+    </div>
+
+    <script>
+        const socket = io();
+        let activeWheel = {};
+        const canvas = document.getElementById('wheel');
+        const ctx = canvas.getContext('2d');
+        const centerX = canvas.width / 2, centerY = canvas.height / 2, radius = 220;
+        let currentRotation = 0, isSpinning = false, pointerWiggle = 0;
+        let lastSegment = 0;
+        let spinAudio = null;
+
+        fetch('/api/config').then(r => r.json()).then(data => {
+            if (data && data.wheels) { activeWheel = data.wheels[data.active_id]; initAudio(); drawFrame(); }
+        });
+
+        socket.on('config_updated', data => {
+            activeWheel = data.wheels[data.active_id]; initAudio();
+            if (!isSpinning) drawFrame();
+        });
+
+        function initAudio() {
+            if (activeWheel.spin_sound) { spinAudio = new Audio('/static/' + activeWheel.spin_sound); } 
+            else { spinAudio = null; }
+        }
+
+        function drawFrame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (!activeWheel || !activeWheel.items || activeWheel.items.length === 0) return;
+            const n = activeWheel.items.length; const arc = (Math.PI * 2) / n;
+
+            ctx.save(); ctx.translate(centerX, centerY); ctx.rotate(currentRotation * Math.PI / 180);
+            for (let i = 0; i < n; i++) {
+                ctx.beginPath(); ctx.fillStyle = activeWheel.items[i].color;
+                ctx.moveTo(0, 0); ctx.arc(0, 0, radius, i * arc, (i + 1) * arc); ctx.fill(); ctx.stroke();
+                ctx.save(); ctx.rotate(i * arc + arc / 2); ctx.textAlign = "right"; ctx.fillStyle = "white"; ctx.font = "bold 16px Segoe UI"; ctx.fillText(activeWheel.items[i].name, radius - 20, 6); ctx.restore();
+            }
+            ctx.fillStyle = "#ffffff"; ctx.strokeStyle = "#cccccc"; ctx.lineWidth = 2;
+            for (let i = 0; i < n; i++) { ctx.beginPath(); ctx.save(); ctx.rotate(i * arc); ctx.arc(radius - 8, 0, 6, 0, 2 * Math.PI); ctx.fill(); ctx.stroke(); ctx.restore(); }
+            ctx.restore();
+
+            let segmentDegrees = 360 / n;
+            let currentSegment = Math.floor(currentRotation / segmentDegrees);
+            if (isSpinning && currentSegment !== lastSegment) {
+                pointerWiggle = -35; 
+                lastSegment = currentSegment;
+            }
+            pointerWiggle += (0 - pointerWiggle) * 0.15; 
+
+            ctx.save(); ctx.translate(centerX, centerY - radius - 10); ctx.rotate(pointerWiggle * Math.PI / 180);
+            ctx.beginPath(); ctx.moveTo(0, 25); ctx.lineTo(-15, 0); ctx.lineTo(15, 0);
+            ctx.closePath(); ctx.fillStyle = "#d83b01"; ctx.fill();
+            ctx.shadowColor = 'rgba(0,0,0,0.3)'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 2; ctx.restore();
+        }
+
+        socket.on('start_spinning', data => {
+            isSpinning = true;
+            lastSegment = Math.floor(currentRotation / (360 / activeWheel.items.length));
+
+            if (spinAudio) {
+                spinAudio.currentTime = 0;
+                spinAudio.play().catch(e => console.error("Lỗi phát nhạc OBS:", e));
+            }
+
+            // VẬT LÝ SIÊU TỐC BÊN OBS
+            let T = data.duration;
+            let t_acc = Math.min(0.10 * T, 1500); 
+            let t_dec = Math.min(0.15 * T, 4000); 
+            let t_con = T - t_acc - t_dec;        
+            
+            const n = activeWheel.items.length;
+            const stopAngle = 270 - (data.index * (360/n)) - ((360/n) / 2);
+            let spins = Math.max(10, Math.floor(T / 250)); // X3 vòng quay
+            
+            let startRotation = currentRotation % 360;
+            let totalRotation = 360 * spins + stopAngle; 
+            let deltaTheta = totalRotation - startRotation;
+            let denom = (t_acc / 2) + t_con + (t_dec / 2);
+            let omega = deltaTheta / denom; 
+            
+            let startTime = null;
+            function animate(timestamp) {
+                if (!startTime) startTime = timestamp;
+                let t = timestamp - startTime;
+
+                if (t < T) {
+                    let theta = 0;
+                    if (t <= t_acc) { theta = 0.5 * (omega / t_acc) * (t * t); } 
+                    else if (t <= t_acc + t_con) { theta = 0.5 * omega * t_acc + omega * (t - t_acc); } 
+                    else {
+                        let t_prime = t - t_acc - t_con;
+                        theta = 0.5 * omega * t_acc + omega * t_con + omega * t_prime - 0.5 * (omega / t_dec) * (t_prime * t_prime); 
+                    }
+                    currentRotation = startRotation + theta;
+                    drawFrame(); requestAnimationFrame(animate);
+                } else {
+                    currentRotation = startRotation + deltaTheta; isSpinning = false; drawFrame();
+                    if (spinAudio) { spinAudio.pause(); spinAudio.currentTime = 0; }
+                    if (data.sound) new Audio('/static/' + data.sound).play().catch(e=>{});
+                    
+                    document.getElementById('pill-msg').style.backgroundColor = data.color;
+                    document.getElementById('winner-name').innerText = data.name;
+                    document.getElementById('popup-overlay').classList.add('show');
+                }
+            }
+            requestAnimationFrame(animate);
+        });
+
+        socket.on('hide_popup', () => { document.getElementById('popup-overlay').classList.remove('show'); });
+    </script>
+</body>
+</html>
